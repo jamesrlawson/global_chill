@@ -2,6 +2,7 @@
 
 MHT1 <- function (latitude, tmin=tmin, tmax=tmax, dates, keep_sunrise_sunset = FALSE, ...) 
 {  
+  
   this.year = unique(dates$Year)[1]
   
   message(paste0('Calculating hourly temperatures for year: ', this.year))
@@ -21,6 +22,7 @@ MHT1 <- function (latitude, tmin=tmin, tmax=tmax, dates, keep_sunrise_sunset = F
     JDay[JDay>365] <- JDay[JDay>365] -365
   }
   
+
   message('  Processing daylengths..')
   
   hourly_temps.list <- vector('list', length(datcells))
@@ -33,7 +35,7 @@ MHT1 <- function (latitude, tmin=tmin, tmax=tmax, dates, keep_sunrise_sunset = F
                              Tmax = tmax[n,],
                              Tmin = tmin[n,])
 
-    hourly_temps.list[[n]] <- chillR::make_hourly_temps(lats[n], dates.cell)
+    hourly_temps.list[[n]] <- round(chillR::make_hourly_temps(lats[n], dates.cell),2)
 
   }
 
@@ -51,76 +53,76 @@ MHT1 <- function (latitude, tmin=tmin, tmax=tmax, dates, keep_sunrise_sunset = F
 # writeToDisk is a string describing an output directory where hourly_temps files can be written to disk
   # this will prevent these outputs using too much system memory
 
-MHT.years <- function(years, lat, JDay, tmin, tmax, writeToDisk=FALSE,...) {
-  
-  message('Annualizing temperature data..')
-  
-  if(class(tmin)=='list') {
-    
-    MHChourly_temps <- future_lapply(seq_along(years), function(x) MHT(lat,
-                                                                    tmin=tmin[[x]],
-                                                                    tmax=tmax[[x]],
-                                                                    dates = data.frame(Year = years[x],
-                                                                                       JDay = JDay)))
-    
-  } else {
-    
-    # should check that tmin and tmax represent the same date range (or are the same dim's)
-    
-    # subset input data to dormancy JDay range
-    # change this to convert to SpatRaster if input data is in raster:: format
-    if(class(tmin[[1]]) %in% c("RasterBrick", "RasterStack")) {
-      dates <- as.Date(1:nlayers(tmin), origin=as.Date(paste0(years[1], "-01-01"))-1)
-    } else {
-      if(class(tmin[[1]]) %in% c("SpatRaster")) {
-        dates <- as.Date(1:nlyr(tmin), origin=as.Date(paste0(years[1], "-01-01"))-1)
-      }
-    }
-    
-    dates.year <- lubridate::year(dates)
-    
-    tmin.out <- vector("list", length(unique(dates.year)))
-    tmax.out <- vector("list", length(unique(dates.year)))
-    period.dates <- vector("list", length(unique(dates.year)))
-    
-    # if(max(JDay)>365) {
-    yearRange <- unique(dates.year)[1:(length(unique(dates.year))-1)]
-    # } else {
-    # yearRange <- unique(dates.year)
-    # }
-    
-    for(i in seq_along(yearRange)) {
-      firstDay <- which(dates.year %in% years[i])[JDay][1]
-      lastDay <- firstDay + length(JDay)-1
-      period <- firstDay:lastDay
-      period.dates[[i]] <- dates[period]
-      tmin.out[[i]] <- tmin[[period]]
-      tmax.out[[i]] <- tmax[[period]]
-    }
-
-    if(!writeToDisk) {
-      MHChourly_temps <- lapply(seq_along(yearRange), function(x) MHT(lat,
-                                                                      tmin=tmin.out[[x]],
-                                                                      tmax=tmax.out[[x]],
-                                                                      dates = data.frame(Year = year(period.dates[[x]]),
-                                                                                         JDay = yday(period.dates[[x]]))))
-      return(MHChourly_temps)
-      
-    } else {
-      
-      lapply(seq_along(yearRange), function(x) MHT(lat,
-                                                   tmin=tmin.out[[x]],
-                                                   tmax=tmax.out[[x]],
-                                                   dates = data.frame(Year = year(period.dates[[x]]),
-                                                                      JDay = yday(period.dates[[x]]))))
-      return(NULL)
-    }
-    
-  }
-  
-  
-  
-}
+# MHT.years <- function(years, lat, JDay, tmin, tmax, writeToDisk=FALSE,...) {
+#   
+#   message('Annualizing temperature data..')
+#   
+#   if(class(tmin)=='list') {
+#     
+#     MHThourly_temps <- future_lapply(seq_along(years), function(x) MHT(lat,
+#                                                                     tmin=tmin[[x]],
+#                                                                     tmax=tmax[[x]],
+#                                                                     dates = data.frame(Year = years[x],
+#                                                                                        JDay = JDay)))
+#     
+#   } else {
+#     
+#     # should check that tmin and tmax represent the same date range (or are the same dim's)
+#     
+#     # subset input data to dormancy JDay range
+#     # change this to convert to SpatRaster if input data is in raster:: format
+#     if(class(tmin[[1]]) %in% c("RasterBrick", "RasterStack")) {
+#       dates <- as.Date(1:nlayers(tmin), origin=as.Date(paste0(years[1], "-01-01"))-1)
+#     } else {
+#       if(class(tmin[[1]]) %in% c("SpatRaster")) {
+#         dates <- as.Date(1:nlyr(tmin), origin=as.Date(paste0(years[1], "-01-01"))-1)
+#       }
+#     }
+#     
+#     dates.year <- lubridate::year(dates)
+#     
+#     tmin.out <- vector("list", length(unique(dates.year)))
+#     tmax.out <- vector("list", length(unique(dates.year)))
+#     period.dates <- vector("list", length(unique(dates.year)))
+#     
+#     # if(max(JDay)>365) {
+#     yearRange <- unique(dates.year)[1:(length(unique(dates.year))-1)]
+#     # } else {
+#     # yearRange <- unique(dates.year)
+#     # }
+#     
+#     for(i in seq_along(yearRange)) {
+#       firstDay <- which(dates.year %in% years[i])[JDay][1]
+#       lastDay <- firstDay + length(JDay)-1
+#       period <- firstDay:lastDay
+#       period.dates[[i]] <- dates[period]
+#       tmin.out[[i]] <- tmin[[period]]
+#       tmax.out[[i]] <- tmax[[period]]
+#     }
+# 
+#     if(!writeToDisk) {
+#       MHThourly_temps <- lapply(seq_along(yearRange), function(x) MHT(lat,
+#                                                                       tmin=tmin.out[[x]],
+#                                                                       tmax=tmax.out[[x]],
+#                                                                       dates = data.frame(Year = year(period.dates[[x]]),
+#                                                                                          JDay = yday(period.dates[[x]]))))
+#       return(MHThourly_temps)
+#       
+#     } else {
+#       
+#       lapply(seq_along(yearRange), function(x) MHT(lat,
+#                                                    tmin=tmin.out[[x]],
+#                                                    tmax=tmax.out[[x]],
+#                                                    dates = data.frame(Year = year(period.dates[[x]]),
+#                                                                       JDay = yday(period.dates[[x]]))))
+#       return(NULL)
+#     }
+#     
+#   }
+#   
+#   
+#   
+# }
 
 
 #### calculate chill portions  ####
@@ -151,7 +153,6 @@ chill_spatial.years <- function(hourly_temps, template, readFromDisk=FALSE, JDay
 # parent function for calculating hourly temperatures and then chill portions
 getChillSpatial <- function(years, lat, JDay, tmin, tmax, template, writeToDisk=FALSE,...) {
   message('Annualizing temperature data..')
-  
   # should check that tmin and tmax represent the same date range (or are the same dim's)
   
   # subset input data to dormancy JDay range
@@ -161,15 +162,14 @@ getChillSpatial <- function(years, lat, JDay, tmin, tmax, template, writeToDisk=
     
     # interpolate hourly temperatures  
 
-    MHChourly_temps <- future_lapply(seq_along(years), function(x) MHT1(lat,
+    MHThourly_temps <- future_lapply(seq_along(years), function(x) MHT1(lat,
                                                                 tmin=tmin[[x]],
                                                                 tmax=tmax[[x]],
                                                                 dates = data.frame(Year = years[x],
                                                                                    JDay = JDay)))
     
   } else {
-
-      if(class(tmin[[1]]) %in% c("RasterBrick", "RasterStack")) {
+      if(class(tmin[[1]]) %in% c("RasterBrick", "RasterStack", "RasterLayer")) {
         dates <- as.Date(1:nlayers(tmin), origin=as.Date(paste0(years[1], "-01-01"))-1)
       } else {
         if(class(tmin[[1]]) %in% c("SpatRaster")) {
@@ -205,16 +205,30 @@ getChillSpatial <- function(years, lat, JDay, tmin, tmax, template, writeToDisk=
         JDay[JDay>365] <- JDay[JDay>365]-365
       }
       
-      chillPortions.list <- vector('list', length(yearRange))
-      for(i in seq_along(yearRange)) {
-        
-        MHChourly_temps <- MHT1(lat,
-                                tmin=tmin.out[[i]],
-                                tmax=tmax.out[[i]],
-                                dates = data.frame(Year = year(period.dates[[i]]),
-                                                   JDay = yday(period.dates[[i]])))
+      daytimes <-  DL(lat, JDay)
+      browser()
+      # MHThourly_temps <- future_lapply(seq_along(years), function(x) MHT1(lat,
+      #                                                                     tmin=tmin.out[[x]],
+      #                                                                     tmax=tmax.out[[x]],
+      #                                                                     dates = data.frame(Year = year(period.dates[[x]]),
+      #                                                                                        JDay = yday(period.dates[[x]]))))
       
-    }
+      MHThourly_temps <- future_lapply(seq_along(years), function(x) MHT(lat,
+                                                                         Day_times=daytimes,
+                                                                          tmin=tmin.out[[x]],
+                                                                          tmax=tmax.out[[x]],
+                                                                          dates = data.frame(Year = year(period.dates[[x]]),
+                                                                                             JDay = yday(period.dates[[x]]))))
+      
+    #   for(i in seq_along(yearRange)) {
+    #     
+    #     MHThourly_temps <- MHT1(lat,
+    #                             tmin=tmin.out[[i]],
+    #                             tmax=tmax.out[[i]],
+    #                             dates = data.frame(Year = year(period.dates[[i]]),
+    #                                                JDay = yday(period.dates[[i]])))
+    #   
+    # }
   
   }
 
@@ -222,7 +236,7 @@ getChillSpatial <- function(years, lat, JDay, tmin, tmax, template, writeToDisk=
     
     plan(multiprocess,  gc=TRUE)
 
-    out <- lapply(MHChourly_temps, chill_spatial.years, JDay=JDay, template=template[[1]][[1]])
+    out <- lapply(MHThourly_temps, chill_spatial.years, JDay=JDay, template=template[[1]][[1]])
     
     future:::ClusterRegistry("stop")
 
