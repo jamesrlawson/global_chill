@@ -1,5 +1,6 @@
 DL <- function (latitude, JDay, notimes.as.na = FALSE) 
 {  
+  
   # if (missing(latitude)) 
   #   stop("'latitude' not specified")
   # if (missing(JDay)) 
@@ -26,8 +27,11 @@ DL <- function (latitude, JDay, notimes.as.na = FALSE)
   CosWo.a <- (CosWo.1 - sin(latitude/360 * 2 * pi))
   CosWo.b <- (cos(latitude/360 * 2 * pi))
   
-  termA <- rast(stack(lapply(Delta.sin, function(x) x * CosWo.a)))
-  termB <- rast(stack(lapply(Delta.cos, function(x) x * CosWo.b)))
+  termA <- rast(stack(lapply(seq_along(Delta.sin), function(x) Delta.sin[x] * CosWo.a[[x]])))
+  termB <- rast(stack(lapply(seq_along(Delta.cos), function(x) Delta.cos[x] * CosWo.b[[x]])))
+
+  # termA <- rast(stack(future_lapply(Delta.sin, function(x) x * CosWo.a)))
+  # termB <- rast(stack(future_lapply(Delta.cos, function(x) x * CosWo.b)))
   
   CosWo <- termA/termB
   
@@ -73,7 +77,7 @@ DL <- function (latitude, JDay, notimes.as.na = FALSE)
   return(list(Sunrise = Sunrise, Sunset = Sunset, Daylength = Daylength, JDay=rep(JDay, each=length(Sunrise))))#/length(JDay))))
 }
 
-MHT <- function (latitude, tmin=tmin, tmax=tmax, dates, Day_times=daytimes, lowMem=writeToDisk, keep_sunrise_sunset = FALSE, ...) 
+MHT <- function (latitude, tmin=tmin, tmax=tmax, dates, Day_times=daytimes, lowMem=writeToDisk, keep_sunrise_sunset = FALSE, template=NULL, ...) 
 {
   # if (missing(latitude)) 
   #   stop("'latitude' not specified")
@@ -83,15 +87,11 @@ MHT <- function (latitude, tmin=tmin, tmax=tmax, dates, Day_times=daytimes, lowM
   #   stop("'latitude' is not numeric")
   # if (latitude > 90 | latitude < (-90)) 
   #   warning("'latitude' is usually between -90 and 90")
-  
-  year = unique(dates$Year)
-  JDay.provided = unique(dates$JDay)
-  
-  JDay <- c(JDay.provided[1]-1, JDay.provided, JDay.provided[length(JDay.provided)]+1, JDay.provided[length(JDay.provided)]+2)
+
   
   # JDay <- (min(JDay.provided)-1):(max(JDay.provided)+2) # expand JDay to account for truncation of 1 day at beginning and 2 days at end of provided dormancy period
   
-  message(paste0('Calculating hourly temperatures for year: ', year))
+  # message(paste0('Calculating hourly temperatures for year: ', years[x]))
   
   # lat <- tmin[[dates$JDay]]
   # xy <- coordinates(raster(tmin[[1]]))
@@ -117,8 +117,8 @@ MHT <- function (latitude, tmin=tmin, tmax=tmax, dates, Day_times=daytimes, lowM
   for(n in datcells) {
     # message(n)
     setTxtProgressBar(pb, n)
-    dates.cell <- data.frame(Year = year,
-                             JDay = JDay,
+    dates.cell <- data.frame(Year = dates$Year,
+                             JDay = dates$JDay,
                              Tmax = tmax[n,][JDay],
                              Tmin = tmin[n,][JDay],
                              cell = n,
@@ -148,8 +148,6 @@ MHT <- function (latitude, tmin=tmin, tmax=tmax, dates, Day_times=daytimes, lowM
   }
   
   close(pb)
-  
-  message("  Reticulating splines..")
   
   dates <- do.call(rbind, dates.list)
   
@@ -203,7 +201,7 @@ MHT <- function (latitude, tmin=tmin, tmax=tmax, dates, Day_times=daytimes, lowM
   dates[nrow(dates), (ncol(dates) - 23):(ncol(dates))][which(is.na(dates[nrow(dates), 
                                                                          (ncol(dates) - 23):(ncol(dates))]))] <- dates[nrow(dates), 
                                                                                                                        "Tmin"]
-  dates <- dates[dates$JDay %in% JDay.provided,]
+  # dates <- dates[dates$JDay %in% JDay.provided,]
   close(pb)
   
   # if(!dir.exists(lowMem)) {
@@ -214,7 +212,59 @@ MHT <- function (latitude, tmin=tmin, tmax=tmax, dates, Day_times=daytimes, lowM
   #   message('  Writing data to disk..')
   #   write_rds(dates, paste0(lowMem, '/hourly_temps', year, '.rds'))
   # } else {
-    return(round(dates,2))
+  dates <- round(dates,2)
+  dates <- split(dates, f=dates$cell)
+  
+  message('  Calculating chill portions..')
+  CP <- pblapply(dates, function(x) dynamic_model(unlist(na.omit(x))))
+  
+  template[datcells] <- unlist(CP)
+  
+  return(template)
   # }
   
 }
+
+dynamic_model <- function(x,total=TRUE){
+  e0 <- 4153.5
+  e1 <- 12888.8
+  a0 <- 139500
+  a1 <- 2.567e+18
+  slp <- 1.6
+  tetmlt <- 277
+  aa <- a0/a1
+  ee <- e1 - e0
+  TK <- x + 273
+  ftmprt <- slp * tetmlt * (TK - tetmlt)/TK
+  sr <- exp(ftmprt)
+  xi <- sr/(1 + sr)
+  xs <- aa * exp(ee/TK)
+  ak1 <- a1 * exp(-e1/TK)
+  interE <- 0
+  memo <- new.env(hash = TRUE)
+  posi <- 1
+  assign(x = paste(1), value = 0, envir = memo)
+  E = 0
+  S <- ak1
+  S[1] <- 0
+  E <- S
+  options(scipen = 30)
+  for (l in 2:length(x)) {
+    if (E[l - 1] < 1) {
+      S[l] <- E[l - 1]
+      E[l] <- xs[l] - (xs[l] - S[l]) * exp(-ak1[l])
+    }
+    else {
+      S[l] <- E[l - 1] - E[l - 1] * xi[l - 1]
+      E[l] <- xs[l] - (xs[l] - S[l]) * exp(-ak1[l])
+    }
+  }
+  interE <- E
+  y <- rep(0, length(x))
+  y[which(interE >= 1)] <- interE[which(interE >= 1)] * 
+    xi[which(interE >= 1)]
+  if (total == TRUE) 
+    return(tail(cumsum(y),n=1))
+  else return(y)
+}
+

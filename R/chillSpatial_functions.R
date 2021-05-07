@@ -135,18 +135,22 @@ chill_spatial <- function(cell, hourly_temps, JDay) {
   return(out)
 }
 
-# wrapper for chill_spatial to run across multuple years
-chill_spatial.years <- function(hourly_temps, template, readFromDisk=FALSE, JDay=NULL) {
+chill_spatial <- function(cell, hourly_temps, start, end) {
+  # out <- chillR::chilling(chillR::stack_hourly_temps(cell), Start_JDay=JDay[1], End_JDay=JDay[length(JDay)])$Chill_portions
+  out <- chillR::chilling(chillR::stack_hourly_temps(cell), Start_JDay=start, End_JDay=end)$Chill_portions
+  
+  return(out)
+}
 
+
+# wrapper for chill_spatial to run across multuple years
+chill_spatial.years <- function(hourly_temps, template, cells, readFromDisk=FALSE, JDay=NULL) {
   # run chill spatial on hourly_temps list object
-    out <- future_lapply(hourly_temps, chill_spatial, JDay=JDay)
-    
+    out <- future_lapply(hourly_temps, chill_spatial, start=JDay[1], end=JDay[length(JDay)])
     # take output values and assign to a template raster
-    out.unlist <- unlist(out)
-    chill.ras <- template
-    cells <- which(!is.na(chill.ras[]))
-    chill.ras[cells] <- out.unlist
-    return(chill.ras)
+    # cells <- which(!is.na(template[]))
+    template[cells] <- unlist(out)
+    return(template)
 }
 
 
@@ -157,16 +161,24 @@ getChillSpatial <- function(years, lat, JDay, tmin, tmax, template, writeToDisk=
   
   # subset input data to dormancy JDay range
   # change this to convert to SpatRaster if input data is in raster:: format
-  
   if(class(tmin)=='list') {
-    
+
     # interpolate hourly temperatures  
 
-    MHThourly_temps <- future_lapply(seq_along(years), function(x) MHT1(lat,
+    # MHThourly_temps <- future_lapply(seq_along(years), function(x) MHT1(lat,
+    #                                                             tmin=tmin[[x]],
+    #                                                             tmax=tmax[[x]],
+    #                                                             dates = data.frame(Year = years[x],
+    #                                                                                JDay = JDay)))
+    daytimes <-  DL(lat, JDay)
+    CP <- future_lapply(seq_along(years), function(x) MHT(lat,
                                                                 tmin=tmin[[x]],
                                                                 tmax=tmax[[x]],
+                                                                Day_times=daytimes,
+                                                                template=tmin[[1]][[1]],
                                                                 dates = data.frame(Year = years[x],
                                                                                    JDay = JDay)))
+
     
   } else {
       if(class(tmin[[1]]) %in% c("RasterBrick", "RasterStack", "RasterLayer")) {
@@ -206,14 +218,13 @@ getChillSpatial <- function(years, lat, JDay, tmin, tmax, template, writeToDisk=
       }
       
       daytimes <-  DL(lat, JDay)
-      browser()
       # MHThourly_temps <- future_lapply(seq_along(years), function(x) MHT1(lat,
       #                                                                     tmin=tmin.out[[x]],
       #                                                                     tmax=tmax.out[[x]],
       #                                                                     dates = data.frame(Year = year(period.dates[[x]]),
       #                                                                                        JDay = yday(period.dates[[x]]))))
       
-      MHThourly_temps <- future_lapply(seq_along(years), function(x) MHT(lat,
+      CP <- future_lapply(seq_along(years), function(x) MHT(lat,
                                                                          Day_times=daytimes,
                                                                           tmin=tmin.out[[x]],
                                                                           tmax=tmax.out[[x]],
@@ -234,13 +245,13 @@ getChillSpatial <- function(years, lat, JDay, tmin, tmax, template, writeToDisk=
 
   # calculate chill portions from hourly temperatures object
     
-    plan(multiprocess,  gc=TRUE)
+    # plan(multiprocess,  gc=TRUE)
+    # 
+    # out <- lapply(MHThourly_temps, chill_spatial.years, JDay=JDay, template=template[[1]][[1]], cells=which(!is.na(template[[1]][[1]][])))
+    # 
+    # future:::ClusterRegistry("stop")
 
-    out <- lapply(MHThourly_temps, chill_spatial.years, JDay=JDay, template=template[[1]][[1]])
-    
-    future:::ClusterRegistry("stop")
-
-  return(out)
+  return(CP)
 
 }
 
