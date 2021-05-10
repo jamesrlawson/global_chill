@@ -171,7 +171,7 @@ getChillSpatial <- function(years, lat, JDay, tmin, tmax, template, writeToDisk=
     #                                                             dates = data.frame(Year = years[x],
     #                                                                                JDay = JDay)))
     daytimes <-  DL(lat, JDay)
-    CP <- future_lapply(seq_along(years), function(x) MHT(lat,
+    CP <- lapply(seq_along(years), function(x) MHT(lat,
                                                                 tmin=tmin[[x]],
                                                                 tmax=tmax[[x]],
                                                                 Day_times=daytimes,
@@ -223,7 +223,6 @@ getChillSpatial <- function(years, lat, JDay, tmin, tmax, template, writeToDisk=
       #                                                                     tmax=tmax.out[[x]],
       #                                                                     dates = data.frame(Year = year(period.dates[[x]]),
       #                                                                                        JDay = yday(period.dates[[x]]))))
-      
       CP <- future_lapply(seq_along(years), function(x) MHT(lat,
                                                                          Day_times=daytimes,
                                                                           tmin=tmin.out[[x]],
